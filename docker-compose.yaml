@@ -63,3 +63,42 @@ services:
       para-services-net:
         aliases:
           - kong-db.local
+  auth-db:
+    image: postgres:9.6
+    environment:
+      POSTGRES_DB: auth-db
+      POSTGRES_PASSWORD: auth-db-password
+      POSTGRES_USER: auth-db-user
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${KONG_PG_USER:-kong}"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    restart: on-failure
+    stdin_open: true
+    tty: true
+    networks:
+      para-services-net:
+        aliases:
+          - auth-db.local
+  auth:
+    build: ./auth
+    image: para-services/auth
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    volumes:
+      - ./auth/db/migrations:/app/db/migrations
+    environment:
+      PORT: 9000
+      DB_HOST: auth-db.local
+      DB_DATABASE: postgres
+      DB_USER: auth-db-user
+      DB_PASSWORD: auth-db-password
+    ports:
+      - "9000:9000"
+    restart: on-failure
+    networks:
+      para-services-net:
+        aliases:
+          - auth.local

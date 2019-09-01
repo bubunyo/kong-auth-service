@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	_ "github.com/bubunyo/para-services/db/migrations"
+	_ "github.com/bubunyo/para-services/auth/db/migrations"
 	_ "github.com/lib/pq"
 	"github.com/pressly/goose"
 )
