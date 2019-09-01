@@ -1,1 +1,1 @@
-package migrations
+package migration

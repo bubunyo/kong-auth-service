@@ -34,8 +34,6 @@ func main() {
 		password = os.Getenv("DB_PASSWORD")
 	)
 
-	fmt.Println(host, dbname, user, password)
-
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
 		"password=%s dbname=%s sslmode=disable",
 		host, port, user, password, dbname)
@@ -45,8 +43,8 @@ func main() {
 	}
 
 	var arguments []string
-	if len(args) > 1 {
-		arguments = append(arguments, args[0:]...)
+	if len(args) > 0 {
+		arguments = append(arguments, args[1:]...)
 	}
 
 	command := args[0]
