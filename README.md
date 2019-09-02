@@ -2,7 +2,7 @@
 
 [Assignment Details](https://github.com/ParaServices/coding-challenge-golang)
 
-##Requirements
+## Requirements
 
 Install Docker and Docker Compose (Docker Compose comes with Docker on Windows and MacOS)
 
