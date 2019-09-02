@@ -6,14 +6,24 @@
 
 Install Docker and Docker Compose (Docker Compose comes with Docker on Windows and MacOS)
 
-## Run Project
+## Run this Project
 
-1. Build the docker services with `docker-compose up --build -d`
-2. Run Migrations auth-db migratios
-3. Run `bootstrap.sh` to setup kong server with plugins and routes
-4. Start the application with ``
+1. Build the docker services with `docker-compose up --build`
+2. Run the auth service  database migrations with `docker-compose run auth ./bin/goose up`
+3. Setup Kong services, routes and plugins with `sh ./bootstrap.sh` to 
+5. Run tests with ``
+4. Start the application with `docker-compose up`
 
-Application should be live on `http://localhost:8000`
+Kong Service will be live on `http://localhost:8000`
+
+## Create a new user
+
+```
+curl -X POST http://localhost:8000/auth/accounts/ 
+```
+
+
+## Getting user credentials
 
 ## Routes
 - Create User
@@ -36,7 +46,7 @@ To generate golang migrations schemas, execute in the root folder.
 docker-compose run auth ./bin/goose create <migration_name> go
 ```
 
-### Run Migrations
+### Runing Migrations
 
 ```
 docker-compose build auth && docker-compose run auth ./bin/goose up

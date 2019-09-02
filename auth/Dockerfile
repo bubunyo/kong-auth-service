@@ -15,6 +15,8 @@ RUN go build -o ./bin/goose ./cmd/goose/main.go
 
 RUN go build -o ./bin/application ./*.go
 
+ENV PORT 8080
+
 EXPOSE 8080
 
-CMD ["./bin/application"]
+ENTRYPOINT ["./bin/application"]

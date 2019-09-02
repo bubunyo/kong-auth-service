@@ -66,11 +66,11 @@ services:
   auth-db:
     image: postgres:9.6
     environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       POSTGRES_DB: auth-db
-      POSTGRES_PASSWORD: auth-db-password
-      POSTGRES_USER: auth-db-user
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "${KONG_PG_USER:-kong}"]
+      test: ["CMD", "pg_isready", "-U", "postgres"]
       interval: 30s
       timeout: 30s
       retries: 3
@@ -92,9 +92,12 @@ services:
     environment:
       PORT: 9000
       DB_HOST: auth-db.local
-      DB_DATABASE: postgres
-      DB_USER: auth-db-user
-      DB_PASSWORD: auth-db-password
+      DB_DATABASE: auth-db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      KONG_HOST: kong.local
+      KONG_ROUTES_PORT: 8000
+      KONG_ADMIN_PORT: 8001
     ports:
       - "9000:9000"
     restart: on-failure
