@@ -13,6 +13,8 @@ COPY . .
 
 RUN go build -o ./bin/goose ./cmd/goose/main.go
 
+RUN go build -o ./bin/application ./*.go
+
 EXPOSE 8080
 
 CMD ["./bin/application"]
