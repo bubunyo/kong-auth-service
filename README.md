@@ -33,22 +33,25 @@ curl -X POST http://localhost:8000/auth/accounts/login -d '{ "data": { "email_ad
 
 ## Running Tests
 
-### Build Test Containers
-
+1. Build Test Containers
 ```
-docker-compose build -f docker-compose.test.yaml
-```
-
-### Run Test DB Migrations Containers
-
-```
-docker-compose run auth-test .bin/goose up 
+docker-compose -f docker-compose.test.yaml build
 ```
 
-### Run Tests
+2. Build goose in test containers 
+```
+docker-compose -f docker-compose.test.yaml run auth-test go build -o ./bin/goose ./cmd/goose/main.go
+```
+
+3. Run Test DB Migrations Containers
+```
+docker-compose -f docker-compose.test.yaml run auth-test ./bin/goose up
+```
+
+4. Run Tests
 
 ```
-docker-compose run auth-test go test
+docker-compose -f docker-compose.test.yaml run auth-test go test
 ```
 
 
