@@ -1,0 +1,518 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/bubunyo/para-services/auth/accounts.go (54.5%)</option>
+				
+				<option value="file1">github.com/bubunyo/para-services/auth/kong.go (78.1%)</option>
+				
+				<option value="file2">github.com/bubunyo/para-services/auth/main.go (3.2%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">package main
+
+import (
+        "database/sql"
+        "encoding/json"
+        "errors"
+        "net/http"
+
+        "github.com/gorilla/mux"
+        "golang.org/x/crypto/bcrypt"
+        "gopkg.in/go-playground/validator.v9"
+)
+
+type D map[string]interface{}
+
+type RequestHandler func(w http.ResponseWriter, req *http.Request)
+
+// ResponseData wraps all response objects in a json `data` object
+type ResponseData struct {
+        Data interface{} `json:"data"`
+}
+
+type Data struct {
+        ID           string `db:"id"`
+        EmailAddress string `json:"email_address",validate:"required,email",db:"email"`
+        Password     string `json:"password"validate:"required",db:"password"`
+}
+
+type ReqBody struct {
+        Data Data `json:"data",validate:"required"`
+}
+type JSONErrs []error
+
+func (je JSONErrs) MarshalJSON() ([]byte, error) <span class="cov0" title="0">{
+        res := make([]interface{}, len(je))
+        for i, e := range je </span><span class="cov0" title="0">{
+                if _, ok := e.(json.Marshaler); ok </span><span class="cov0" title="0">{
+                        res[i] = e // e knows how to marshal itself
+                }</span> else<span class="cov0" title="0"> {
+                        res[i] = e.Error() // Fallback to the error string
+                }</span>
+        }
+        <span class="cov0" title="0">return json.Marshal(res)</span>
+}
+
+func (d Data) hashPassword() string <span class="cov8" title="1">{
+        hash, _ := bcrypt.GenerateFromPassword([]byte(d.Password), bcrypt.MinCost)
+        return string(hash)
+}</span>
+func (d Data) passwordMatches(hashedPwd string) bool <span class="cov8" title="1">{
+        byteHash := []byte(hashedPwd)
+        err := bcrypt.CompareHashAndPassword(byteHash, []byte(d.Password))
+        if err != nil </span><span class="cov0" title="0">{
+                return false
+        }</span>
+        <span class="cov8" title="1">return true</span>
+}
+
+func (u ReqBody) validate(v *validator.Validate) error <span class="cov8" title="1">{
+        return v.Struct(u)
+}</span>
+
+func SuccessResponse(s int, w http.ResponseWriter, r interface{}) error <span class="cov8" title="1">{
+        w.WriteHeader(s)
+        return json.NewEncoder(w).Encode(ResponseData{Data: r})
+}</span>
+
+func ErrorResponse(s int, w http.ResponseWriter, r error) error <span class="cov0" title="0">{
+        w.WriteHeader(s)
+        return json.NewEncoder(w).Encode(ResponseData{Data: JSONErrs([]error{r})})
+}</span>
+
+func CredentialsResponse(id, token string) map[string]interface{} <span class="cov8" title="1">{
+        return D{
+                "account_id": id,
+                "credentials": D{
+                        "jwt": token,
+                },
+        }
+}</span>
+
+func AccountRoutes(r *mux.Router, db *sql.DB) <span class="cov0" title="0">{
+        k := NewKong()
+        v := validator.New()
+        r.HandleFunc("/register", accountCreationHandler(db, k, v)).Methods("POST")
+        r.HandleFunc("/login", authenticationHandler(db, k, v)).Methods("POST")
+}</span>
+
+func accountCreationHandler(db *sql.DB, kong *Kong, validator *validator.Validate) RequestHandler <span class="cov8" title="1">{
+        return func(w http.ResponseWriter, req *http.Request) </span><span class="cov8" title="1">{
+                // Get Data form body
+                reqBody := ReqBody{}
+                err := json.NewDecoder(req.Body).Decode(&amp;reqBody)
+                //Could not decode json
+                if err != nil </span><span class="cov0" title="0">{
+                        _ = ErrorResponse(http.StatusBadRequest, w, err)
+                        return
+                }</span>
+
+                // validate Data
+                // Check validation rules in the struct tags of ReqBody
+                <span class="cov8" title="1">err = reqBody.validate(validator)
+                if err != nil </span><span class="cov0" title="0">{
+                        _ = ErrorResponse(http.StatusBadRequest, w, err)
+                        return
+                }</span>
+
+                // Create User
+                <span class="cov8" title="1">err = db.QueryRow(
+                        "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id",
+                        reqBody.Data.EmailAddress,
+                        reqBody.Data.hashPassword(),
+                ).Scan(&amp;reqBody.Data.ID)
+                if err != nil </span><span class="cov0" title="0">{
+                        _ = ErrorResponse(http.StatusInternalServerError, w, err)
+                        return
+                }</span>
+
+                // Register details in kong and get CredentialsResponse
+                <span class="cov8" title="1">jwtCredentials := &amp;KongJWTCredentials{}
+                jwtCredentials, err = kong.CreateConsumerCredentials(reqBody.Data.ID)
+                if err != nil </span><span class="cov0" title="0">{
+                        _ = ErrorResponse(http.StatusInternalServerError, w, err)
+                        return
+                }</span>
+
+                // Save JWT CredentialsResponse inside database
+                <span class="cov8" title="1">_, err = db.Exec(
+                        "UPDATE users SET jwt_credentials = $2 WHERE id = $1",
+                        reqBody.Data.ID, jwtCredentials)
+                if err != nil </span><span class="cov0" title="0">{
+                        _ = ErrorResponse(http.StatusInternalServerError, w, err)
+                        return
+                }</span>
+
+                // Generate JWT
+                <span class="cov8" title="1">var token string
+                token, err = jwtCredentials.GenerateJWT()
+                if err != nil </span><span class="cov0" title="0">{
+                        _ = ErrorResponse(http.StatusInternalServerError, w, err)
+                        return
+                }</span>
+
+                //send the response
+                <span class="cov8" title="1">_ = SuccessResponse(http.StatusOK, w, CredentialsResponse(reqBody.Data.ID, token))</span>
+        }
+}
+
+func authenticationHandler(db *sql.DB, kong *Kong, validator *validator.Validate) RequestHandler <span class="cov8" title="1">{
+        return func(w http.ResponseWriter, req *http.Request) </span><span class="cov8" title="1">{
+
+                // Get Data form body
+                reqBody := ReqBody{}
+                err := json.NewDecoder(req.Body).Decode(&amp;reqBody)
+                //Could not decode json
+                if err != nil </span><span class="cov0" title="0">{
+                        _ = ErrorResponse(http.StatusBadRequest, w, err)
+                        return
+                }</span>
+
+                // validate Data
+                // Check validation rules in the struct tags of the ReqBody struct
+                <span class="cov8" title="1">err = reqBody.validate(validator)
+                if err != nil </span><span class="cov0" title="0">{
+                        _ = ErrorResponse(http.StatusBadRequest, w, err)
+                        return
+                }</span>
+
+                // Find User or return 404
+                <span class="cov8" title="1">jwtCredentials := new(KongJWTCredentials)
+                var passwordHash string
+                err = db.QueryRow(
+                        "SELECT id, email, password, jwt_credentials FROM users WHERE email = $1",
+                        reqBody.Data.EmailAddress,
+                ).Scan(&amp;reqBody.Data.ID, &amp;reqBody.Data.EmailAddress, &amp;passwordHash, &amp;jwtCredentials)
+                if err != nil </span><span class="cov0" title="0">{
+                        _ = ErrorResponse(http.StatusNotFound, w, errors.New("user not found"))
+                        return
+                }</span>
+
+                <span class="cov8" title="1">if !reqBody.Data.passwordMatches(passwordHash) </span><span class="cov0" title="0">{
+                        // return the same error as the previous to prevent bad actors from knowing
+                        // which of the two submitted fields are wrong
+                        _ = ErrorResponse(http.StatusNotFound, w, errors.New("user not found"))
+                        return
+                }</span>
+
+                // Generate JWT
+                <span class="cov8" title="1">var token string
+                token, err = jwtCredentials.GenerateJWT()
+                if err != nil </span><span class="cov0" title="0">{
+                        _ = ErrorResponse(http.StatusInternalServerError, w, err)
+                        return
+                }</span>
+
+                //send the response
+                <span class="cov8" title="1">_ = SuccessResponse(http.StatusOK, w, CredentialsResponse(reqBody.Data.ID, token))</span>
+        }
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package main
+
+import (
+        "bytes"
+        "database/sql/driver"
+        "encoding/json"
+        "errors"
+        "fmt"
+        "net/http"
+        "os"
+        "time"
+
+        "github.com/dgrijalva/jwt-go"
+)
+
+const JwtValidityHours = 3
+
+type KongConsumer struct {
+        Username string `json:"username"`
+        CustomID string `json:"custom_id"`
+        ID       string `json:"id"`
+}
+
+// KongStatus returns the status of the kong server
+type Kong struct {
+        Host   string
+        Port   string
+        Client *http.Client
+}
+
+func NewKong() *Kong <span class="cov0" title="0">{
+        return &amp;Kong{
+                os.Getenv("KONG_HOST"),
+                os.Getenv("KONG_ADMIN_PORT"),
+                &amp;http.Client{
+                        Timeout: time.Second * 10,
+                },
+        }
+}</span>
+
+type KongJWTCredentials struct {
+        ConsumerID string `json:"consumer_id"`
+        CreatedAt  int64  `json:"created_at"`
+        ID         string `json:"id"`
+        Key        string `json:"key"`
+        Secret     string `json:"secret"`
+}
+func (j KongJWTCredentials) Value() (driver.Value, error) <span class="cov8" title="1">{
+        return json.Marshal(j)
+}</span>
+func (j *KongJWTCredentials) Scan(value interface{}) error <span class="cov8" title="1">{
+        b, ok := value.([]byte)
+        if !ok </span><span class="cov0" title="0">{
+                return errors.New("type assertion to []byte failed")
+        }</span>
+
+        <span class="cov8" title="1">return json.Unmarshal(b, &amp;j)</span>
+}
+
+func (k KongJWTCredentials) GenerateJWT() (string, error) <span class="cov8" title="1">{
+        expiresAt := time.Now().Add(time.Hour * JwtValidityHours).Unix()
+        token := jwt.New(jwt.SigningMethodHS256)
+
+        token.Claims = &amp;jwt.StandardClaims{
+                ExpiresAt: expiresAt,
+                Id:        k.ConsumerID,
+        }
+
+        tokenString, err := token.SignedString([]byte(k.Secret))
+        if err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+        <span class="cov8" title="1">return tokenString, nil</span>
+}
+
+func (k Kong) CreateConsumerCredentials(userId string) (*KongJWTCredentials, error) <span class="cov8" title="1">{
+
+        b := new(bytes.Buffer)
+
+        c := KongConsumer{CustomID: userId}
+
+        // Creating the consumer on Kong
+        _ = json.NewEncoder(b).Encode(c)
+        res, err := k.Client.Post(
+                fmt.Sprintf("http://%s:%s/consumers", k.Host, k.Port),
+                "application/json",
+                b,
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+        <span class="cov8" title="1">defer res.Body.Close()
+
+        err = json.NewDecoder(res.Body).Decode(&amp;c)
+
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        // Generating CredentialsResponse
+        <span class="cov8" title="1">_ = json.NewEncoder(b).Encode(c)
+        res, err = k.Client.Post(
+                fmt.Sprintf("http://%s:%s/consumers/%s/jwtCredentials", k.Host, k.Port, c.CustomID),
+                "application/json",
+                nil,
+        )
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">var jwtCredentials KongJWTCredentials
+        err = json.NewDecoder(res.Body).Decode(&amp;jwtCredentials)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">return &amp;jwtCredentials, nil</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package main
+
+import (
+        "context"
+        "database/sql"
+        "encoding/json"
+        "flag"
+        "fmt"
+        "github.com/bubunyo/para-services/auth/db"
+        "log"
+        "net/http"
+        "os"
+        "os/signal"
+        "time"
+
+        "github.com/gorilla/mux"
+        _ "github.com/lib/pq"
+)
+
+type MountPoint func(r *mux.Router, db *sql.DB)
+
+func mount(db *sql.DB, r *mux.Router, path string, mp MountPoint) <span class="cov0" title="0">{
+        mp(r.PathPrefix(path).Subrouter(), db)
+}</span>
+
+func responseMiddleware(next http.Handler) http.Handler <span class="cov0" title="0">{
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) </span><span class="cov0" title="0">{
+                // Setting responses to json
+                w.Header().Set("Content-Type", "application/json")
+                next.ServeHTTP(w, r)
+        }</span>)
+}
+
+func healthCheck(w http.ResponseWriter, req *http.Request) <span class="cov8" title="1">{
+        _ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}</span>
+
+func main() <span class="cov0" title="0">{
+        var wait time.Duration
+        flag.DurationVar(&amp;wait, "graceful-timeout", time.Second*15,
+                "the duration for which the server gracefully wait for existing connections to finish - e.g. 15s or 1m")
+        flag.Parse()
+
+        r := mux.NewRouter()
+
+        // Redirect routes with trailing slash to the routes without tailing slashes
+        // Ref - https://github.com/gorilla/mux/issues/30#issuecomment-21255847
+        r = r.StrictSlash(true)
+        r.Use(responseMiddleware)
+
+        // Creating Database Connection
+        conn := db.New()
+
+        mount(conn.DB, r, "/accounts", AccountRoutes)
+        // Health Check
+        r.HandleFunc("/healthcheck", healthCheck)
+
+        port := os.Getenv("PORT")
+        if port == "" </span><span class="cov0" title="0">{
+                port = "8080"
+        }</span>
+        <span class="cov0" title="0">srv := &amp;http.Server{
+                Addr: fmt.Sprintf("0.0.0.0:%s", port),
+                // Set timeouts to avoid Slowloris attacks.
+                WriteTimeout: time.Second * 15,
+                ReadTimeout:  time.Second * 15,
+                IdleTimeout:  time.Second * 60,
+                Handler:      r,
+        }
+
+        go func() </span><span class="cov0" title="0">{
+                log.Printf("Starting server on port %s", port)
+                if err := srv.ListenAndServe(); err != nil </span><span class="cov0" title="0">{
+                        log.Println(err)
+                }</span>
+        }()
+
+        <span class="cov0" title="0">c := make(chan os.Signal, 1)
+        signal.Notify(c, os.Interrupt)
+
+        // Block until we receive our signal.
+        &lt;-c
+
+        ctx, cancel := context.WithTimeout(context.Background(), wait)
+        defer cancel()
+        _ = conn.DB.Close();
+        _ = srv.Shutdown(ctx)
+
+        log.Println("shutting down")
+        os.Exit(0)</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>
