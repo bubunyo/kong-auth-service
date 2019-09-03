@@ -1,0 +1,108 @@
+version: '2.1'
+networks:
+    para-services-net-test:
+        driver: bridge
+services:
+  kong-migrations-test:
+    image: "${KONG_DOCKER_TAG:-kong:latest}"
+    command: kong migrations bootstrap
+    depends_on:
+      kong-db-test:
+        condition: service_healthy
+    environment:
+      KONG_DATABASE: postgres
+      KONG_PG_DATABASE: ${KONG_PG_DATABASE:-kong}
+      KONG_PG_HOST: kong-db.local
+      KONG_PG_PASSWORD: ${KONG_PG_PASSWORD:-kong}
+      KONG_PG_USER: ${KONG_PG_USER:-kong}
+    networks:
+      para-services-net-test:
+        aliases:
+          - kong-migrations.local
+  kong-test:
+    image: "${KONG_DOCKER_TAG:-kong:latest}"
+    depends_on:
+      kong-db-test:
+        condition: service_healthy
+    environment:
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: '0.0.0.0:8001'
+      KONG_DATABASE: postgres
+      KONG_PG_DATABASE: ${KONG_PG_DATABASE:-kong}
+      KONG_PG_HOST: kong-db.local
+      KONG_PG_PASSWORD: ${KONG_PG_PASSWORD:-kong}
+      KONG_PG_USER: ${KONG_PG_USER:-kong}
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+    ports:
+      - "8000:8000/tcp"
+      - "8001:8001/tcp"
+      - "8443:8443/tcp"
+      - "8444:8444/tcp"
+    restart: on-failure
+    networks:
+      para-services-net-test:
+        aliases:
+          - kong.local
+  kong-db-test:
+    image: postgres:9.6
+    environment:
+      POSTGRES_DB: ${KONG_PG_DATABASE:-kong}
+      POSTGRES_PASSWORD: ${KONG_PG_PASSWORD:-kong}
+      POSTGRES_USER: ${KONG_PG_USER:-kong}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${KONG_PG_USER:-kong}"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    restart: on-failure
+    stdin_open: true
+    tty: true
+    networks:
+      para-services-net-test:
+        aliases:
+          - kong-db.local
+  auth-db-test:
+    image: postgres:9.6
+    container_name: auth-test-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: auth-db
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    restart: on-failure
+    stdin_open: true
+    tty: true
+    networks:
+      para-services-net-test:
+        aliases:
+          - auth-db.local
+  auth-test:
+    build: ./auth
+    image: para-services/auth
+    depends_on:
+      auth-db-test:
+        condition: service_healthy
+    volumes:
+      - ./auth:/app
+    environment:
+      PORT: 9000
+      DB_HOST: auth-db.local
+      DB_DATABASE: auth-db
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      KONG_HOST: kong.local
+      KONG_ROUTES_PORT: 8000
+      KONG_ADMIN_PORT: 8001
+    ports:
+      - "9000:9000"
+    restart: on-failure
+    networks:
+      para-services-net-test:
+        aliases:
+          - auth.local

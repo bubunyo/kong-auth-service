@@ -3,7 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
+	"errors"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -12,6 +12,8 @@ import (
 )
 
 type D map[string]interface{}
+
+type RequestHandler func(w http.ResponseWriter, req *http.Request)
 
 // ResponseData wraps all response objects in a json `data` object
 type ResponseData struct {
@@ -45,7 +47,7 @@ func (d Data) hashPassword() string {
 	hash, _ := bcrypt.GenerateFromPassword([]byte(d.Password), bcrypt.MinCost)
 	return string(hash)
 }
-func (d Data) PasswordMatches(hashedPwd string) bool {
+func (d Data) passwordMatches(hashedPwd string) bool {
 	byteHash := []byte(hashedPwd)
 	err := bcrypt.CompareHashAndPassword(byteHash, []byte(d.Password))
 	if err != nil {
@@ -54,11 +56,9 @@ func (d Data) PasswordMatches(hashedPwd string) bool {
 	return true
 }
 
-func (u ReqBody) Validate(v *validator.Validate) error {
+func (u ReqBody) validate(v *validator.Validate) error {
 	return v.Struct(u)
 }
-
-type RequestHandler func(w http.ResponseWriter, req *http.Request)
 
 func SuccessResponse(s int, w http.ResponseWriter, r interface{}) error {
 	w.WriteHeader(s)
@@ -70,7 +70,7 @@ func ErrorResponse(s int, w http.ResponseWriter, r error) error {
 	return json.NewEncoder(w).Encode(ResponseData{Data: JSONErrs([]error{r})})
 }
 
-func Credentials(id, token string) map[string]interface{} {
+func CredentialsResponse(id, token string) map[string]interface{} {
 	return D{
 		"account_id": id,
 		"credentials": D{
@@ -82,11 +82,11 @@ func Credentials(id, token string) map[string]interface{} {
 func AccountRoutes(r *mux.Router, db *sql.DB) {
 	k := NewKong()
 	v := validator.New()
-	r.HandleFunc("/register", CreateAccount(db, k, v)).Methods("POST")
-	r.HandleFunc("/login", Authenticate(db, k, v)).Methods("POST")
+	r.HandleFunc("/register", accountCreationHandler(db, k, v)).Methods("POST")
+	r.HandleFunc("/login", authenticationHandler(db, k, v)).Methods("POST")
 }
 
-func CreateAccount(db *sql.DB, kong *Kong, validator *validator.Validate) RequestHandler {
+func accountCreationHandler(db *sql.DB, kong *Kong, validator *validator.Validate) RequestHandler {
 	return func(w http.ResponseWriter, req *http.Request) {
 		// Get Data form body
 		reqBody := ReqBody{}
@@ -97,9 +97,9 @@ func CreateAccount(db *sql.DB, kong *Kong, validator *validator.Validate) Reques
 			return
 		}
 
-		// Validate Data
+		// validate Data
 		// Check validation rules in the struct tags of ReqBody
-		err = reqBody.Validate(validator)
+		err = reqBody.validate(validator)
 		if err != nil {
 			_ = ErrorResponse(http.StatusBadRequest, w, err)
 			return
@@ -116,7 +116,7 @@ func CreateAccount(db *sql.DB, kong *Kong, validator *validator.Validate) Reques
 			return
 		}
 
-		// Register details in kong and get Credentials
+		// Register details in kong and get CredentialsResponse
 		jwtCredentials := &KongJWTCredentials{}
 		jwtCredentials, err = kong.CreateConsumerCredentials(reqBody.Data.ID)
 		if err != nil {
@@ -124,7 +124,7 @@ func CreateAccount(db *sql.DB, kong *Kong, validator *validator.Validate) Reques
 			return
 		}
 
-		// Save JWT Credentials inside database
+		// Save JWT CredentialsResponse inside database
 		_, err = db.Exec(
 			"UPDATE users SET jwt_credentials = $2 WHERE id = $1",
 			reqBody.Data.ID, jwtCredentials)
@@ -142,11 +142,11 @@ func CreateAccount(db *sql.DB, kong *Kong, validator *validator.Validate) Reques
 		}
 
 		//send the response
-		_ = SuccessResponse(http.StatusOK, w, Credentials(reqBody.Data.ID, token))
+		_ = SuccessResponse(http.StatusOK, w, CredentialsResponse(reqBody.Data.ID, token))
 	}
 }
 
-func Authenticate(db *sql.DB, kong *Kong, validator *validator.Validate) RequestHandler {
+func authenticationHandler(db *sql.DB, kong *Kong, validator *validator.Validate) RequestHandler {
 	return func(w http.ResponseWriter, req *http.Request) {
 
 		// Get Data form body
@@ -158,16 +158,15 @@ func Authenticate(db *sql.DB, kong *Kong, validator *validator.Validate) Request
 			return
 		}
 
-		// Validate Data
-		// Check validation rules in the struct tags of ReqBody
-		err = reqBody.Validate(validator)
+		// validate Data
+		// Check validation rules in the struct tags of the ReqBody struct
+		err = reqBody.validate(validator)
 		if err != nil {
 			_ = ErrorResponse(http.StatusBadRequest, w, err)
 			return
 		}
 
 		// Find User or return 404
-
 		jwtCredentials := new(KongJWTCredentials)
 		var passwordHash string
 		err = db.QueryRow(
@@ -175,18 +174,16 @@ func Authenticate(db *sql.DB, kong *Kong, validator *validator.Validate) Request
 			reqBody.Data.EmailAddress,
 		).Scan(&reqBody.Data.ID, &reqBody.Data.EmailAddress, &passwordHash, &jwtCredentials)
 		if err != nil {
-			_ = ErrorResponse(http.StatusNotFound, w, err)
+			_ = ErrorResponse(http.StatusNotFound, w, errors.New("user not found"))
 			return
 		}
-		log.Println("User found")
 
-		if !reqBody.Data.PasswordMatches(passwordHash) {
+		if !reqBody.Data.passwordMatches(passwordHash) {
 			// return the same error as the previous to prevent bad actors from knowing
 			// which of the two submitted fields are wrong
-			_ = ErrorResponse(http.StatusNotFound, w, err)
+			_ = ErrorResponse(http.StatusNotFound, w, errors.New("user not found"))
 			return
 		}
-		log.Println("Passwords match")
 
 		// Generate JWT
 		var token string
@@ -195,9 +192,8 @@ func Authenticate(db *sql.DB, kong *Kong, validator *validator.Validate) Request
 			_ = ErrorResponse(http.StatusInternalServerError, w, err)
 			return
 		}
-		log.Println("Passwords match")
 
 		//send the response
-		_ = SuccessResponse(http.StatusOK, w, Credentials(reqBody.Data.ID, token))
+		_ = SuccessResponse(http.StatusOK, w, CredentialsResponse(reqBody.Data.ID, token))
 	}
 }

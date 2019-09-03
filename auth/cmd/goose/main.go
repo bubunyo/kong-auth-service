@@ -1,9 +1,8 @@
 package main
 
 import (
-	"database/sql"
 	"flag"
-	"fmt"
+	"github.com/bubunyo/para-services/auth/db"
 	"log"
 	"os"
 
@@ -26,21 +25,7 @@ func main() {
 		return
 	}
 
-	var (
-		host     = os.Getenv("DB_HOST")
-		port     = 5432
-		dbname   = os.Getenv("DB_DATABASE")
-		user     = os.Getenv("DB_USER")
-		password = os.Getenv("DB_PASSWORD")
-	)
-
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-		"password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname)
-	db, err := sql.Open("postgres", psqlInfo)
-	if err != nil {
-		log.Fatalf("goose: failed to open DB: %v\n", err)
-	}
+	conn := db.New()
 
 	var arguments []string
 	if len(args) > 0 {
@@ -49,7 +34,7 @@ func main() {
 
 	command := args[0]
 
-	if err := goose.Run(command, db, *dir, arguments...); err != nil {
+	if err := goose.Run(command, conn.DB, *dir, arguments...); err != nil {
 		log.Fatalf("goose %v: %v", command, err)
 	}
 }

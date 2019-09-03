@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/bubunyo/para-services/auth/db"
 	"log"
 	"net/http"
 	"os"
@@ -40,38 +41,26 @@ func main() {
 		"the duration for which the server gracefully wait for existing connections to finish - e.g. 15s or 1m")
 	flag.Parse()
 
-	// Creating Database Connection
-
-	var (
-		host     = os.Getenv("DB_HOST")
-		dbPort     = 5432
-		dbname   = os.Getenv("DB_DATABASE")
-		user     = os.Getenv("DB_USER")
-		password = os.Getenv("DB_PASSWORD")
-		appPort = os.Getenv("PORT")
-	)
-
-	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
-		"password=%s dbname=%s sslmode=disable",
-		host, dbPort, user, password, dbname)
-	db, err := sql.Open("postgres", psqlInfo)
-	if err != nil {
-		log.Fatalf("auth-app: failed to open DB: %v\n", err)
-	}
-
 	r := mux.NewRouter()
 
 	// Redirect routes with trailing slash to the routes without tailing slashes
 	// Ref - https://github.com/gorilla/mux/issues/30#issuecomment-21255847
 	r = r.StrictSlash(true)
 	r.Use(responseMiddleware)
-	mount(db, r, "/accounts", AccountRoutes)
+
+	// Creating Database Connection
+	conn := db.New()
+
+	mount(conn.DB, r, "/accounts", AccountRoutes)
 	// Health Check
 	r.HandleFunc("/healthcheck", healthCheck)
 
-
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 	srv := &http.Server{
-		Addr: fmt.Sprintf("0.0.0.0:%s", appPort),
+		Addr: fmt.Sprintf("0.0.0.0:%s", port),
 		// Set timeouts to avoid Slowloris attacks.
 		WriteTimeout: time.Second * 15,
 		ReadTimeout:  time.Second * 15,
@@ -80,7 +69,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("Starting server on port %s", appPort)
+		log.Printf("Starting server on port %s", port)
 		if err := srv.ListenAndServe(); err != nil {
 			log.Println(err)
 		}
@@ -94,7 +83,7 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
-	_ = db.Close();
+	_ = conn.DB.Close();
 	_ = srv.Shutdown(ctx)
 
 	log.Println("shutting down")

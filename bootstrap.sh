@@ -6,6 +6,3 @@ curl -X POST http://localhost:8001/services/auth-v1/routes/ -H 'Content-Type: ap
 
 # Confirm Setup complete
 curl http://localhost:8000/auth/healthcheck
-
-# Enable the JWT Plugin
-curl -X POST http://localhost:8001/services/auth-v1/plugins -H 'Content-Type: application/json' -d '{ "name": "jwt" }'

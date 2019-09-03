@@ -97,7 +97,7 @@ func (k Kong) CreateConsumerCredentials(userId string) (*KongJWTCredentials, err
 		return nil, err
 	}
 
-	// Generating Credentials
+	// Generating CredentialsResponse
 	_ = json.NewEncoder(b).Encode(c)
 	res, err = k.Client.Post(
 		fmt.Sprintf("http://%s:%s/consumers/%s/jwtCredentials", k.Host, k.Port, c.CustomID),

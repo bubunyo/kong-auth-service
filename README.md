@@ -10,14 +10,14 @@ Install Docker and Docker Compose (Docker Compose comes with Docker on Windows a
 
 1. Build the docker services with `docker-compose build`
 2. Run the auth service  database migrations with `docker-compose build auth && docker-compose run auth ./bin/goose up`
-3. Setup Kong services, routes and plugins with `sh ./bootstrap.sh`
-4. Start the application with `docker-compose up`
+3. Start the services  in detached mode with `docker-compose up -d`
+4. Setup Kong services, routes and plugins with `sh ./bootstrap.sh`
 
 Kong Service will be live on `http://localhost:8000`
 
 ## Auth Service Health Check Endpoint
 
-`http://localhost:8000/healtcheck`
+`http://localhost:8000/auth/healthcheck`
 
 ## Register a new user account(Account Creation)
 
@@ -31,17 +31,33 @@ curl -X POST http://localhost:8000/auth/accounts/register -d '{ "data": { "email
 curl -X POST http://localhost:8000/auth/accounts/login -d '{ "data": { "email_address": "test@mail.com", "password": "password" }}'
 ```
 
-## Run Tests
+## Running Tests
+
+### Build Test Containers
+
 ```
-docker-compose build -f docker-compose.yaml -f docker-compose.test.yaml
+docker-compose build -f docker-compose.test.yaml
+```
+
+### Run Test DB Migrations Containers
+
+```
+docker-compose run auth-test .bin/goose up 
+```
+
+### Run Tests
+
+```
+docker-compose run auth-test go test
 ```
 
 
 ## Getting user credentials
 
 ## Routes
-- Create User
-- Get User Auth
+- Account Creation  `[POST] http://localhost:8000/auth/accounts/register`
+- Authentication `[POST] http://localhost:8000/auth/accounts/login`
+- Health Check `[GET] http://localhost:8000/auth/healthcheck`
 
 ## Migrations
 Database migrations are handled by [goose](https://github.com/pressly/goose)
