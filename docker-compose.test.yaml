@@ -90,6 +90,7 @@ services:
         condition: service_healthy
     volumes:
       - ./auth:/app
+      - ./auth/tmp:/tmp
     environment:
       PORT: 9000
       DB_HOST: auth-db.local
