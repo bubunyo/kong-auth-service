@@ -8,18 +8,32 @@ Install Docker and Docker Compose (Docker Compose comes with Docker on Windows a
 
 ## Run this Project
 
-1. Build the docker services with `docker-compose up --build`
-2. Run the auth service  database migrations with `docker-compose run auth ./bin/goose up`
-3. Setup Kong services, routes and plugins with `sh ./bootstrap.sh` to 
-5. Run tests with ``
+1. Build the docker services with `docker-compose build`
+2. Run the auth service  database migrations with `docker-compose build auth && docker-compose run auth ./bin/goose up`
+3. Setup Kong services, routes and plugins with `sh ./bootstrap.sh`
 4. Start the application with `docker-compose up`
 
 Kong Service will be live on `http://localhost:8000`
 
-## Create a new user
+## Auth Service Health Check Endpoint
+
+`http://localhost:8000/healtcheck`
+
+## Register a new user account(Account Creation)
 
 ```
-curl -X POST http://localhost:8000/auth/accounts/ 
+curl -X POST http://localhost:8000/auth/accounts/register -d '{ "data": { "email_address": "test@mail.com", "password": "password" }}'
+```
+
+## Login to an existing account(Account Authentication)
+
+```
+curl -X POST http://localhost:8000/auth/accounts/login -d '{ "data": { "email_address": "test@mail.com", "password": "password" }}'
+```
+
+## Run Tests
+```
+docker-compose build -f docker-compose.yaml -f docker-compose.test.yaml
 ```
 
 
@@ -38,12 +52,12 @@ Migrations Schemas are created in `auth/db/migrations`
 
 To generate sql migrations schemas, the prefered migration type execute in the root folder.
 ```
-docker-compose run auth ./bin/goose create <migration_name> sql
+docker-compose build auth && docker-compose run auth ./bin/goose create <migration_name> sql
 ```
 
 To generate golang migrations schemas, execute in the root folder.
 ```
-docker-compose run auth ./bin/goose create <migration_name> go
+docker-compose build auth && docker-compose run auth ./bin/goose create <migration_name> go
 ```
 
 ### Runing Migrations
@@ -56,6 +70,6 @@ docker-compose build auth && docker-compose run auth ./bin/goose up
 
 To view executed and pending migrations run
 ```
-docker-compose run auth ./bin/goose status
+docker-compose build auth && docker-compose run auth ./bin/goose status
 ```
 

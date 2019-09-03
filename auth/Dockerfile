@@ -1,22 +1,10 @@
-
 FROM golang:1.12.9
-
 LABEL maintainer="Bubunyo Nyavor <kiddbubu@gmail.com>"
-
 WORKDIR /app
-
 COPY go.mod go.sum ./
-
 RUN go mod download
-
 COPY . .
-
 RUN go build -o ./bin/goose ./cmd/goose/main.go
-
 RUN go build -o ./bin/application ./*.go
-
 ENV PORT 8080
-
-EXPOSE 8080
-
-ENTRYPOINT ["./bin/application"]
+CMD ["./bin/application"]

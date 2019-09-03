@@ -64,14 +64,9 @@ func main() {
 	// Redirect routes with trailing slash to the routes without tailing slashes
 	// Ref - https://github.com/gorilla/mux/issues/30#issuecomment-21255847
 	r = r.StrictSlash(true)
-
-	// Setting the content type of all api responses to json
 	r.Use(responseMiddleware)
-
-	// mount Account Routes
 	mount(db, r, "/accounts", AccountRoutes)
-
-	// Supplemantary Api Routes
+	// Health Check
 	r.HandleFunc("/healthcheck", healthCheck)
 
 
@@ -84,7 +79,6 @@ func main() {
 		Handler:      r,
 	}
 
-	// Run server in a goroutine so that it doesn't block.
 	go func() {
 		log.Printf("Starting server on port %s", appPort)
 		if err := srv.ListenAndServe(); err != nil {
@@ -93,18 +87,13 @@ func main() {
 	}()
 
 	c := make(chan os.Signal, 1)
-	// We'll accept graceful shutdowns when quit via SIGINT (Ctrl+C)
-	// SIGKILL, SIGQUIT or SIGTERM (Ctrl+/) will not be caught.
 	signal.Notify(c, os.Interrupt)
 
 	// Block until we receive our signal.
 	<-c
 
-	// Create a deadline to wait for.
 	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
-	// Doesn't block if no connections, but will otherwise wait
-	// until the timeout deadline.
 	_ = db.Close();
 	_ = srv.Shutdown(ctx)
 

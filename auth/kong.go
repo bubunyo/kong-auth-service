@@ -2,12 +2,18 @@ package main
 
 import (
 	"bytes"
+	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
 )
+
+const JwtValidityHours = 3
 
 type KongConsumer struct {
 	Username string `json:"username"`
@@ -22,14 +28,6 @@ type Kong struct {
 	Client *http.Client
 }
 
-type KongJWTCredentials struct {
-	ConsumerID string `json:"consumer_id"`
-	CreatedAt  int64  `json:"created_at"`
-	ID         string `json:"id"`
-	Key        string `json:"key"`
-	Secret     string `json:"secret"`
-}
-
 func NewKong() *Kong {
 	return &Kong{
 		os.Getenv("KONG_HOST"),
@@ -40,25 +38,42 @@ func NewKong() *Kong {
 	}
 }
 
-func (k Kong) Status() (D, error) {
-	res, err := k.Client.Get(fmt.Sprintf("http://%s:%s", k.Host, k.Port))
-	if err != nil {
-		return nil, err
+type KongJWTCredentials struct {
+	ConsumerID string `json:"consumer_id"`
+	CreatedAt  int64  `json:"created_at"`
+	ID         string `json:"id"`
+	Key        string `json:"key"`
+	Secret     string `json:"secret"`
+}
+func (j KongJWTCredentials) Value() (driver.Value, error) {
+	return json.Marshal(j)
+}
+func (j *KongJWTCredentials) Scan(value interface{}) error {
+	b, ok := value.([]byte)
+	if !ok {
+		return errors.New("type assertion to []byte failed")
 	}
-	defer res.Body.Close()
 
-	var body D
-
-	err = json.NewDecoder(res.Body).Decode(&body)
-
-	if err == nil {
-		return nil, err
-	}
-
-	return body, nil
+	return json.Unmarshal(b, &j)
 }
 
-func (k Kong) CreateUserCredentials(userId string) (*KongJWTCredentials, error) {
+func (k KongJWTCredentials) GenerateJWT() (string, error) {
+	expiresAt := time.Now().Add(time.Hour * JwtValidityHours).Unix()
+	token := jwt.New(jwt.SigningMethodHS256)
+
+	token.Claims = &jwt.StandardClaims{
+		ExpiresAt: expiresAt,
+		Id:        k.ConsumerID,
+	}
+
+	tokenString, err := token.SignedString([]byte(k.Secret))
+	if err != nil {
+		return "", err
+	}
+	return tokenString, nil
+}
+
+func (k Kong) CreateConsumerCredentials(userId string) (*KongJWTCredentials, error) {
 
 	b := new(bytes.Buffer)
 
@@ -85,7 +100,7 @@ func (k Kong) CreateUserCredentials(userId string) (*KongJWTCredentials, error) 
 	// Generating Credentials
 	_ = json.NewEncoder(b).Encode(c)
 	res, err = k.Client.Post(
-		fmt.Sprintf("http://%s:%s/consumers/%s/jwt", k.Host, k.Port, c.CustomID),
+		fmt.Sprintf("http://%s:%s/consumers/%s/jwtCredentials", k.Host, k.Port, c.CustomID),
 		"application/json",
 		nil,
 	)
@@ -93,11 +108,11 @@ func (k Kong) CreateUserCredentials(userId string) (*KongJWTCredentials, error) 
 		return nil, err
 	}
 
-	var jwt KongJWTCredentials
-	err = json.NewDecoder(res.Body).Decode(&jwt)
+	var jwtCredentials KongJWTCredentials
+	err = json.NewDecoder(res.Body).Decode(&jwtCredentials)
 	if err != nil {
 		return nil, err
 	}
 
-	return &jwt, nil
+	return &jwtCredentials, nil
 }
