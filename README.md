@@ -1,6 +1,4 @@
-# Para Services Assignment
-
-[Assignment Details](https://github.com/ParaServices/coding-challenge-golang)
+# JWT Auth API using Kong 
 
 ## Requirements
 
